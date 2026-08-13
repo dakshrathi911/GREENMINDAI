@@ -1,500 +1,566 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import greenmindLogo from "./assets/greenmind-logo.png";
-import EnergyChart from "./components/EnergyChart";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "http://127.0.0.1:8000/api/dashboard";
 
 function App() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/dashboard`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to fetch dashboard data");
-        }
+  const fetchDashboard = async () => {
+    try {
+      const response = await fetch(API_URL);
 
-        return response.json();
-      })
-      .then((data) => {
-        setDashboard(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("Could not connect to GreenMind AI backend.");
-        setLoading(false);
-      });
+      if (!response.ok) {
+        throw new Error("Backend request failed");
+      }
+
+      const data = await response.json();
+
+      setDashboard(data);
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Could not connect to GreenMind AI backend."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+
+    // Refresh dashboard every 30 seconds.
+    const interval = setInterval(
+      fetchDashboard,
+      30000
+    );
+
+    return () => clearInterval(interval);
   }, []);
 
-  /* =========================================
-     LOADING SCREEN
-  ========================================= */
+  const formatNumber = (value) => {
+    if (value === undefined || value === null) {
+      return "--";
+    }
+
+    return Number(value).toLocaleString(
+      "en-IN",
+      {
+        maximumFractionDigits: 0,
+      }
+    );
+  };
+
+  const getPriorityClass = (priority) => {
+    switch (priority) {
+      case "high":
+        return "priority-high";
+
+      case "medium":
+        return "priority-medium";
+
+      default:
+        return "priority-low";
+    }
+  };
+
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case "high":
+        return "HIGH PRIORITY";
+
+      case "medium":
+        return "MEDIUM PRIORITY";
+
+      default:
+        return "LOW PRIORITY";
+    }
+  };
+
+  const getTrendClass = (change) => {
+    if (change > 0) {
+      return "trend-up";
+    }
+
+    if (change < 0) {
+      return "trend-down";
+    }
+
+    return "trend-neutral";
+  };
 
   if (loading) {
     return (
-      <div className="loading-screen">
-        <div className="loading-logo">
-          <img
-            src={greenmindLogo}
-            alt="GreenMind AI"
-          />
+      <div className="app loading-screen">
+        <div className="loading-card">
+          <div className="loading-spinner"></div>
+
+          <h2>GreenMind AI</h2>
+
+          <p>
+            Loading energy intelligence...
+          </p>
         </div>
-
-        <h2>GreenMind AI</h2>
-
-        <p>
-          Connecting to sustainability intelligence...
-        </p>
       </div>
     );
   }
-
-  /* =========================================
-     ERROR SCREEN
-  ========================================= */
-
-  if (error) {
-    return (
-      <div className="loading-screen">
-
-        <div className="error-icon">
-          !
-        </div>
-
-        <h2>
-          GreenMind AI
-        </h2>
-
-        <p>
-          {error}
-        </p>
-
-        <button
-          className="action-button"
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </button>
-
-      </div>
-    );
-  }
-
-  /* =========================================
-     METRIC DATA
-  ========================================= */
-
-  const metrics = [
-    {
-      title: "Energy Usage",
-
-      value: `${dashboard.energy_usage.value} ${dashboard.energy_usage.unit}`,
-
-      change: `${
-        dashboard.energy_usage.change > 0 ? "↑" : "↓"
-      } ${Math.abs(dashboard.energy_usage.change)}%`,
-
-      label: "vs. previous period",
-    },
-
-    {
-      title: "Carbon Footprint",
-
-      value: `${dashboard.carbon_footprint.value} ${dashboard.carbon_footprint.unit}`,
-
-      change: `${
-        dashboard.carbon_footprint.change > 0 ? "↑" : "↓"
-      } ${Math.abs(dashboard.carbon_footprint.change)}%`,
-
-      label: "CO₂ emissions",
-    },
-
-    {
-      title: "Efficiency Score",
-
-      value: `${dashboard.efficiency_score.value}${dashboard.efficiency_score.unit}`,
-
-      change: `${
-        dashboard.efficiency_score.change > 0 ? "↑" : "↓"
-      } ${Math.abs(dashboard.efficiency_score.change)}%`,
-
-      label: "overall efficiency",
-    },
-  ];
 
   return (
     <div className="app">
 
-      {/* =========================================
-          SIDEBAR
-      ========================================= */}
+      {/* ================================== */}
+      {/* HEADER */}
+      {/* ================================== */}
 
-      <aside className="sidebar">
+      <header className="topbar">
 
         <div className="brand">
 
-          <div className="brand-mark">
-
-            <img
-              src={greenmindLogo}
-              alt="GreenMind AI logo"
-            />
-
+          <div className="brand-logo">
+            🌱
           </div>
-
-          <div className="brand-text">
-
-            <h1>
-              GreenMind <span>AI</span>
-            </h1>
-
-            <p>
-              Sustainability Intelligence
-            </p>
-
-          </div>
-
-        </div>
-
-        {/* NAVIGATION */}
-
-        <nav className="navigation">
-
-          <button className="nav-item active">
-            <span>⌂</span>
-            Dashboard
-          </button>
-
-          <button className="nav-item">
-            <span>◫</span>
-            Analytics
-          </button>
-
-          <button className="nav-item">
-            <span>✦</span>
-            AI Insights
-          </button>
-
-          <button className="nav-item">
-            <span>⚙</span>
-            Optimize
-          </button>
-
-        </nav>
-
-        {/* SIDEBAR BOTTOM */}
-
-        <div className="sidebar-bottom">
-
-          <button className="nav-item">
-            <span>⚙</span>
-            Settings
-          </button>
-
-          <div className="system-status">
-
-            <span className="status-dot"></span>
-
-            <div>
-
-              <strong>
-                System Online
-              </strong>
-
-              <small>
-                Backend connected
-              </small>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </aside>
-
-      {/* =========================================
-          MAIN CONTENT
-      ========================================= */}
-
-      <main className="main-content">
-
-        {/* TOP BAR */}
-
-        <header className="topbar">
 
           <div>
+            <h1>GreenMind AI</h1>
 
-            <p className="eyebrow">
-              GREENMIND AI
-            </p>
-
-            <h2>
-              Dashboard
-            </h2>
-
-            <p className="subtitle">
-              Intelligent sustainability monitoring and optimization.
-            </p>
-
+            <span>
+              Energy Intelligence Platform
+            </span>
           </div>
 
-          <div className="topbar-status">
+        </div>
 
-            <span className="status-dot"></span>
+        <div className="system-status">
 
-            Live monitoring
+          <span className="status-dot"></span>
 
-          </div>
+          AI SYSTEM ONLINE
 
-        </header>
+        </div>
 
-        {/* =========================================
-            METRICS
-        ========================================= */}
+      </header>
 
-        <section className="metrics-grid">
 
-          {metrics.map((metric) => (
+      {/* ================================== */}
+      {/* ERROR */}
+      {/* ================================== */}
 
-            <div
-              className="metric-card"
-              key={metric.title}
-            >
+      {error && (
+        <div className="error-banner">
+          {error}
+        </div>
+      )}
+
+
+      {dashboard && (
+        <main className="dashboard">
+
+          {/* ================================== */}
+          {/* OVERVIEW CARDS */}
+          {/* ================================== */}
+
+          <section className="metrics-grid">
+
+            <div className="metric-card">
 
               <div className="metric-header">
-
-                <span>
-                  {metric.title}
-                </span>
-
+                <span>ENERGY USAGE</span>
                 <span className="metric-icon">
-                  ◈
+                  ⚡
                 </span>
-
               </div>
 
-              <h3>
-                {metric.value}
-              </h3>
+              <div className="metric-value">
+                {formatNumber(
+                  dashboard.energy_usage.value
+                )}
 
-              <div className="metric-footer">
+                <small>
+                  {" "}
+                  {dashboard.energy_usage.unit}
+                </small>
+              </div>
 
-                <span className="positive">
-                  {metric.change}
+              <div className="metric-description">
+                Current aggregate demand
+              </div>
+
+            </div>
+
+
+            <div className="metric-card">
+
+              <div className="metric-header">
+                <span>CARBON FOOTPRINT</span>
+                <span className="metric-icon">
+                  ◉
                 </span>
+              </div>
 
-                <span>
-                  {metric.label}
+              <div className="metric-value">
+                {formatNumber(
+                  dashboard.carbon_footprint.value
+                )}
+
+                <small>
+                  {" "}
+                  {dashboard.carbon_footprint.unit}
+                </small>
+              </div>
+
+              <div className="metric-description">
+                Estimated current emissions
+              </div>
+
+            </div>
+
+
+            <div className="metric-card">
+
+              <div className="metric-header">
+                <span>EFFICIENCY SCORE</span>
+                <span className="metric-icon">
+                  ✦
                 </span>
-
               </div>
 
-            </div>
+              <div className="metric-value">
+                {dashboard.efficiency_score.value}
 
-          ))}
-
-        </section>
-
-        {/* =========================================
-            ENERGY CHART + AI PREDICTION
-        ========================================= */}
-
-        <section className="dashboard-grid">
-
-          {/* ENERGY CONSUMPTION */}
-
-          <div className="panel energy-panel">
-
-            <div className="panel-header">
-
-              <div>
-
-                <h3>
-                  Energy Consumption
-                </h3>
-
-                <p>
-                  Power usage over the last 24 hours
-                </p>
-
+                <small>
+                  {" "}
+                  {dashboard.efficiency_score.unit}
+                </small>
               </div>
 
-              <span className="panel-value">
-
-                {dashboard.energy_usage.value}{" "}
-                {dashboard.energy_usage.unit}
-
-              </span>
-
-            </div>
-
-            {/* REAL BACKEND-DRIVEN CHART */}
-
-            <EnergyChart
-              data={dashboard.energy_history}
-            />
-
-          </div>
-
-          {/* =========================================
-              AI PREDICTION
-          ========================================= */}
-
-          <div className="panel prediction-panel">
-
-            <div className="panel-header">
-
-              <div>
-
-                <h3>
-                  AI Prediction
-                </h3>
-
-                <p>
-                  Expected energy demand
-                </p>
-
-              </div>
-
-              <span className="ai-badge">
-                AI
-              </span>
-
-            </div>
-
-            <div className="prediction-value">
-
-              <strong>
-
-                {dashboard.prediction.value}{" "}
-                {dashboard.prediction.unit}
-
-              </strong>
-
-              <span>
-                {dashboard.prediction.period}
-              </span>
-
-            </div>
-
-            <div className="prediction-bar">
-
-              <div></div>
-
-            </div>
-
-            <div className="prediction-details">
-
-              <span>
-
-                Current:{" "}
-                {dashboard.energy_usage.value}{" "}
-                {dashboard.energy_usage.unit}
-
-              </span>
-
-              <span>
-
-                +{dashboard.prediction.change}%
-
-              </span>
-
-            </div>
-
-            <p className="prediction-note">
-
-              Demand is expected to increase during
-              the upcoming high-load period.
-
-            </p>
-
-          </div>
-
-        </section>
-
-        {/* =========================================
-            AI RECOMMENDATIONS
-        ========================================= */}
-
-        <section className="panel recommendations-panel">
-
-          <div className="panel-header">
-
-            <div>
-
-              <h3>
-                AI Recommendations
-              </h3>
-
-              <p>
-                Optimization opportunities detected by GreenMind AI
-              </p>
-
-            </div>
-
-            <span className="recommendation-count">
-
-              {dashboard.recommendations.length} actions
-
-            </span>
-
-          </div>
-
-          <div className="recommendations">
-
-            {dashboard.recommendations.map(
-              (recommendation, index) => (
+              <div className="efficiency-bar">
 
                 <div
-                  className="recommendation-card"
-                  key={recommendation.title}
-                >
+                  className="efficiency-fill"
+                  style={{
+                    width: `${dashboard.efficiency_score.value}%`,
+                  }}
+                />
 
-                  <div className="recommendation-icon">
+              </div>
 
-                    {index === 0
-                      ? "⚡"
-                      : index === 1
-                      ? "🌡️"
-                      : "🌱"}
+            </div>
 
-                  </div>
+          </section>
 
-                  <div className="recommendation-content">
 
-                    <h4>
+          {/* ================================== */}
+          {/* MAIN GRID */}
+          {/* ================================== */}
+
+          <section className="main-grid">
+
+
+            {/* ================================== */}
+            {/* ENERGY HISTORY */}
+            {/* ================================== */}
+
+            <div className="panel history-panel">
+
+              <div className="panel-header">
+
+                <div>
+                  <h2>Energy Demand</h2>
+
+                  <p>
+                    Last 24 hours
+                  </p>
+                </div>
+
+                <span className="live-label">
+                  ● LIVE DATA
+                </span>
+
+              </div>
+
+
+              <div className="chart-container">
+
+                {dashboard.energy_history?.map(
+                  (point, index) => {
+
+                    const values =
+                      dashboard.energy_history.map(
+                        (item) =>
+                          item.energy
+                      );
+
+                    const max =
+                      Math.max(...values);
+
+                    const height =
+                      max > 0
+                        ? (point.energy / max) * 100
+                        : 0;
+
+                    return (
+                      <div
+                        className="chart-column"
+                        key={`${point.time}-${index}`}
+                      >
+
+                        <div
+                          className="chart-bar"
+                          style={{
+                            height: `${Math.max(
+                              height,
+                              2
+                            )}%`,
+                          }}
+                          title={`${point.time}: ${formatNumber(
+                            point.energy
+                          )} kW`}
+                        />
+
+                        <span>
+                          {point.time}
+                        </span>
+
+                      </div>
+                    );
+                  }
+                )}
+
+              </div>
+
+            </div>
+
+
+            {/* ================================== */}
+            {/* AI PREDICTION */}
+            {/* ================================== */}
+
+            <div className="panel prediction-panel">
+
+              <div className="panel-header">
+
+                <div>
+                  <h2>AI Forecast</h2>
+
+                  <p>
+                    {dashboard.prediction.period}
+                  </p>
+                </div>
+
+                <div className="ai-badge">
+                  AI
+                </div>
+
+              </div>
+
+
+              <div className="prediction-value">
+
+                {formatNumber(
+                  dashboard.prediction.value
+                )}
+
+                <span>
+                  {dashboard.prediction.unit}
+                </span>
+
+              </div>
+
+
+              <div
+                className={`prediction-change ${getTrendClass(
+                  dashboard.prediction.change
+                )}`}
+              >
+
+                {dashboard.prediction.change > 0
+                  ? "↑"
+                  : dashboard.prediction.change < 0
+                  ? "↓"
+                  : "→"}
+
+                {" "}
+
+                {Math.abs(
+                  dashboard.prediction.change
+                ).toFixed(2)}
+                %
+
+                <span>
+                  {" "}
+                  predicted change
+                </span>
+
+              </div>
+
+
+              {/* Confidence */}
+
+              <div className="confidence-section">
+
+                <div className="confidence-header">
+
+                  <span>
+                    Model confidence
+                  </span>
+
+                  <strong>
+                    {dashboard.prediction.confidence?.toFixed(
+                      1
+                    )}
+                    %
+                  </strong>
+
+                </div>
+
+
+                <div className="confidence-bar">
+
+                  <div
+                    className="confidence-fill"
+                    style={{
+                      width: `${dashboard.prediction.confidence || 0}%`,
+                    }}
+                  />
+
+                </div>
+
+
+                <p>
+                  Based on Random Forest
+                  prediction consistency
+                </p>
+
+              </div>
+
+
+              <div className="prediction-source">
+
+                Based on historical data through{" "}
+                <strong>
+                  {dashboard.prediction.based_on}
+                </strong>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* ================================== */}
+          {/* AI RECOMMENDATIONS */}
+          {/* ================================== */}
+
+          <section className="panel recommendations-panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <h2>
+                  AI Recommendations
+                </h2>
+
+                <p>
+                  Actions generated from
+                  current energy patterns
+                </p>
+
+              </div>
+
+              <div className="recommendation-icon">
+                ✦
+              </div>
+
+            </div>
+
+
+            <div className="recommendations-list">
+
+              {dashboard.recommendations?.map(
+                (recommendation, index) => (
+
+                  <div
+                    className={`recommendation-card ${getPriorityClass(
+                      recommendation.priority
+                    )}`}
+                    key={index}
+                  >
+
+                    <div className="recommendation-top">
+
+                      <span
+                        className={`priority-badge ${getPriorityClass(
+                          recommendation.priority
+                        )}`}
+                      >
+                        {getPriorityLabel(
+                          recommendation.priority
+                        )}
+                      </span>
+
+                    </div>
+
+
+                    <h3>
                       {recommendation.title}
-                    </h4>
+                    </h3>
+
 
                     <p>
                       {recommendation.description}
                     </p>
 
-                    <span>
-                      {recommendation.saving}
-                    </span>
+
+                    <div className="recommendation-saving">
+
+                      <span>
+                        Potential impact
+                      </span>
+
+                      <strong>
+                        {recommendation.saving}
+                      </strong>
+
+                    </div>
 
                   </div>
 
-                  <button className="action-button">
-                    Review
-                  </button>
+                )
+              )}
 
-                </div>
+            </div>
 
-              )
-            )}
+          </section>
 
-          </div>
 
-        </section>
+          {/* ================================== */}
+          {/* FOOTER */}
+          {/* ================================== */}
 
-      </main>
+          <footer>
+
+            <span>
+              GreenMind AI
+            </span>
+
+            <span>
+              AI-powered energy intelligence
+            </span>
+
+            <span>
+              ● System operational
+            </span>
+
+          </footer>
+
+        </main>
+      )}
 
     </div>
   );
