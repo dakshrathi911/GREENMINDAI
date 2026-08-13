@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import greenmindLogo from "./assets/greenmind-logo.png";
+import EnergyChart from "./components/EnergyChart";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -29,27 +30,48 @@ function App() {
       });
   }, []);
 
+  /* =========================================
+     LOADING SCREEN
+  ========================================= */
+
   if (loading) {
     return (
       <div className="loading-screen">
         <div className="loading-logo">
-          <img src={greenmindLogo} alt="GreenMind AI" />
+          <img
+            src={greenmindLogo}
+            alt="GreenMind AI"
+          />
         </div>
 
         <h2>GreenMind AI</h2>
-        <p>Connecting to sustainability intelligence...</p>
+
+        <p>
+          Connecting to sustainability intelligence...
+        </p>
       </div>
     );
   }
 
+  /* =========================================
+     ERROR SCREEN
+  ========================================= */
+
   if (error) {
     return (
       <div className="loading-screen">
-        <div className="error-icon">!</div>
 
-        <h2>GreenMind AI</h2>
+        <div className="error-icon">
+          !
+        </div>
 
-        <p>{error}</p>
+        <h2>
+          GreenMind AI
+        </h2>
+
+        <p>
+          {error}
+        </p>
 
         <button
           className="action-button"
@@ -57,33 +79,49 @@ function App() {
         >
           Retry
         </button>
+
       </div>
     );
   }
 
+  /* =========================================
+     METRIC DATA
+  ========================================= */
+
   const metrics = [
     {
       title: "Energy Usage",
+
       value: `${dashboard.energy_usage.value} ${dashboard.energy_usage.unit}`,
-      change: `${dashboard.energy_usage.change > 0 ? "↑" : "↓"} ${Math.abs(
-        dashboard.energy_usage.change
-      )}%`,
+
+      change: `${
+        dashboard.energy_usage.change > 0 ? "↑" : "↓"
+      } ${Math.abs(dashboard.energy_usage.change)}%`,
+
       label: "vs. previous period",
     },
+
     {
       title: "Carbon Footprint",
+
       value: `${dashboard.carbon_footprint.value} ${dashboard.carbon_footprint.unit}`,
-      change: `${dashboard.carbon_footprint.change > 0 ? "↑" : "↓"} ${Math.abs(
-        dashboard.carbon_footprint.change
-      )}%`,
+
+      change: `${
+        dashboard.carbon_footprint.change > 0 ? "↑" : "↓"
+      } ${Math.abs(dashboard.carbon_footprint.change)}%`,
+
       label: "CO₂ emissions",
     },
+
     {
       title: "Efficiency Score",
+
       value: `${dashboard.efficiency_score.value}${dashboard.efficiency_score.unit}`,
-      change: `${dashboard.efficiency_score.change > 0 ? "↑" : "↓"} ${Math.abs(
-        dashboard.efficiency_score.change
-      )}%`,
+
+      change: `${
+        dashboard.efficiency_score.change > 0 ? "↑" : "↓"
+      } ${Math.abs(dashboard.efficiency_score.change)}%`,
+
       label: "overall efficiency",
     },
   ];
@@ -91,20 +129,25 @@ function App() {
   return (
     <div className="app">
 
-      {/* SIDEBAR */}
+      {/* =========================================
+          SIDEBAR
+      ========================================= */}
 
       <aside className="sidebar">
 
         <div className="brand">
 
           <div className="brand-mark">
+
             <img
               src={greenmindLogo}
               alt="GreenMind AI logo"
             />
+
           </div>
 
           <div className="brand-text">
+
             <h1>
               GreenMind <span>AI</span>
             </h1>
@@ -112,9 +155,12 @@ function App() {
             <p>
               Sustainability Intelligence
             </p>
+
           </div>
 
         </div>
+
+        {/* NAVIGATION */}
 
         <nav className="navigation">
 
@@ -140,6 +186,8 @@ function App() {
 
         </nav>
 
+        {/* SIDEBAR BOTTOM */}
+
         <div className="sidebar-bottom">
 
           <button className="nav-item">
@@ -152,8 +200,15 @@ function App() {
             <span className="status-dot"></span>
 
             <div>
-              <strong>System Online</strong>
-              <small>Backend connected</small>
+
+              <strong>
+                System Online
+              </strong>
+
+              <small>
+                Backend connected
+              </small>
+
             </div>
 
           </div>
@@ -162,9 +217,13 @@ function App() {
 
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* =========================================
+          MAIN CONTENT
+      ========================================= */}
 
       <main className="main-content">
+
+        {/* TOP BAR */}
 
         <header className="topbar">
 
@@ -194,7 +253,9 @@ function App() {
 
         </header>
 
-        {/* METRICS */}
+        {/* =========================================
+            METRICS
+        ========================================= */}
 
         <section className="metrics-grid">
 
@@ -239,9 +300,13 @@ function App() {
 
         </section>
 
-        {/* CHART + AI PREDICTION */}
+        {/* =========================================
+            ENERGY CHART + AI PREDICTION
+        ========================================= */}
 
         <section className="dashboard-grid">
+
+          {/* ENERGY CONSUMPTION */}
 
           <div className="panel energy-panel">
 
@@ -260,33 +325,25 @@ function App() {
               </div>
 
               <span className="panel-value">
+
                 {dashboard.energy_usage.value}{" "}
                 {dashboard.energy_usage.unit}
+
               </span>
 
             </div>
 
-            <div className="chart">
+            {/* REAL BACKEND-DRIVEN CHART */}
 
-              <div className="chart-grid"></div>
-
-              <div className="chart-line"></div>
-
-              <div className="chart-labels">
-
-                <span>00:00</span>
-                <span>06:00</span>
-                <span>12:00</span>
-                <span>18:00</span>
-                <span>Now</span>
-
-              </div>
-
-            </div>
+            <EnergyChart
+              data={dashboard.energy_history}
+            />
 
           </div>
 
-          {/* AI PREDICTION */}
+          {/* =========================================
+              AI PREDICTION
+          ========================================= */}
 
           <div className="panel prediction-panel">
 
@@ -313,8 +370,10 @@ function App() {
             <div className="prediction-value">
 
               <strong>
+
                 {dashboard.prediction.value}{" "}
                 {dashboard.prediction.unit}
+
               </strong>
 
               <span>
@@ -324,18 +383,25 @@ function App() {
             </div>
 
             <div className="prediction-bar">
+
               <div></div>
+
             </div>
 
             <div className="prediction-details">
 
               <span>
-                Current: {dashboard.energy_usage.value}{" "}
+
+                Current:{" "}
+                {dashboard.energy_usage.value}{" "}
                 {dashboard.energy_usage.unit}
+
               </span>
 
               <span>
+
                 +{dashboard.prediction.change}%
+
               </span>
 
             </div>
@@ -351,7 +417,9 @@ function App() {
 
         </section>
 
-        {/* AI RECOMMENDATIONS */}
+        {/* =========================================
+            AI RECOMMENDATIONS
+        ========================================= */}
 
         <section className="panel recommendations-panel">
 
@@ -370,7 +438,9 @@ function App() {
             </div>
 
             <span className="recommendation-count">
+
               {dashboard.recommendations.length} actions
+
             </span>
 
           </div>
