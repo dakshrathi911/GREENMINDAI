@@ -15,6 +15,8 @@ import pandas as pd
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from models.optimization_engine import optimize
+
 
 warnings.filterwarnings("ignore")
 
@@ -1914,6 +1916,35 @@ def historical_endpoint():
         }
 
     except Exception as e:
+
+        return {
+            "error":
+                str(e)
+        }
+
+
+# ============================================================
+# OPTIMIZATION ENDPOINT
+# ============================================================
+
+@app.get("/api/optimization")
+def optimization_endpoint():
+
+    try:
+
+        optimization = optimize()
+
+        return {
+            "optimization":
+                optimization
+        }
+
+    except Exception as e:
+
+        print(
+            "Optimization error:",
+            str(e)
+        )
 
         return {
             "error":

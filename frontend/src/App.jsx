@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000/api/dashboard";
+const OPTIMIZATION_API_URL = "http://127.0.0.1:8000/api/optimization";
 
 function formatNumber(value, decimals = 0) {
   if (
@@ -97,6 +98,8 @@ function getAnomalyIcon(anomaly) {
 
 function App() {
   const [dashboard, setDashboard] = useState(null);
+  const [optimization, setOptimization] = useState(null);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -135,16 +138,51 @@ function App() {
 
 
   /* ============================================================
+     LOAD OPTIMIZATION
+     ============================================================ */
+
+  async function loadOptimization() {
+    try {
+      setOptimizationLoading(true);
+
+      const response = await fetch(
+        OPTIMIZATION_API_URL
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Optimization backend returned ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      setOptimization(
+        data.optimization || data
+      );
+    } catch (err) {
+      console.error(
+        "Optimization error:",
+        err
+      );
+    } finally {
+      setOptimizationLoading(false);
+    }
+  }
+
+
+  /* ============================================================
      AUTO REFRESH
      ============================================================ */
 
   useEffect(() => {
     loadDashboard();
+    loadOptimization();
 
-    const interval = setInterval(
-      loadDashboard,
-      30000
-    );
+    const interval = setInterval(() => {
+      loadDashboard();
+      loadOptimization();
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
@@ -847,6 +885,23 @@ function App() {
               </span>
 
               Historical
+            </button>
+
+            <button
+              className={
+                activeInsight === "optimization"
+                  ? "insight-tab active optimization-tab"
+                  : "insight-tab optimization-tab"
+              }
+              onClick={() =>
+                setActiveInsight("optimization")
+              }
+            >
+              <span className="tab-icon">
+                ⚡
+              </span>
+
+              Optimization
             </button>
 
           </div>
@@ -1650,6 +1705,333 @@ function App() {
 
 
         {/* ===================================================== */}
+        {/* ENERGY OPTIMIZATION */}
+        {/* ===================================================== */}
+
+        {activeInsight === "optimization" && (
+
+          <section className="panel optimization-panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <div className="decision-label">
+                  GREENMIND AI
+                </div>
+
+                <h2>
+                  Energy Optimization
+                </h2>
+
+                <p>
+                  AI-powered workload scheduling for the next 24 hours
+                </p>
+
+              </div>
+
+              <div className="recommendation-icon">
+                ⚡
+              </div>
+
+            </div>
+
+
+            {optimizationLoading && !optimization ? (
+
+              <div className="optimization-loading">
+                <div className="loading-spinner">
+                  ⚡
+                </div>
+
+                <p>
+                  Analysing upcoming energy demand...
+                </p>
+              </div>
+
+            ) : optimization?.best_window ? (
+
+              <>
+
+                <div className="optimization-hero">
+
+                  <div className="optimization-hero-main">
+
+                    <span className="optimization-eyebrow">
+                      RECOMMENDED WINDOW
+                    </span>
+
+                    <h3>
+                      {optimization.best_window.start}
+                      {" – "}
+                      {optimization.best_window.end}
+                    </h3>
+
+                    <p>
+                      Schedule flexible or energy-intensive workloads
+                      during this forecasted low-demand period.
+                    </p>
+
+                  </div>
+
+                  <div className="optimization-rating">
+                    <span>
+                      AI RATING
+                    </span>
+
+                    <strong>
+                      {String(
+                        optimization.best_window.rating || "excellent"
+                      ).toUpperCase()}
+                    </strong>
+
+                    <small>
+                      {formatNumber(
+                        optimization.best_window.confidence,
+                        1
+                      )}% confidence
+                    </small>
+                  </div>
+
+                </div>
+
+
+                <div className="optimization-stats">
+
+                  <div className="optimization-stat">
+                    <span>
+                      AI FORECAST
+                    </span>
+
+                    <strong>
+                      {formatNumber(
+                        optimization.best_window.average_predicted_demand,
+                        0
+                      )}
+                      {" "}
+                      <small>kW</small>
+                    </strong>
+                  </div>
+
+                  <div className="optimization-stat">
+                    <span>
+                      HISTORICAL EXPECTED
+                    </span>
+
+                    <strong>
+                      {formatNumber(
+                        optimization.best_window.average_historical_demand,
+                        0
+                      )}
+                      {" "}
+                      <small>kW</small>
+                    </strong>
+                  </div>
+
+                  <div className="optimization-stat">
+                    <span>
+                      BELOW HISTORICAL BASELINE
+                    </span>
+
+                    <strong className="decision-down">
+                      {Math.abs(
+                        Number(
+                          optimization.best_window
+                            .saving_vs_historical_baseline || 0
+                        )
+                      ).toFixed(2)}
+                      %
+                    </strong>
+                  </div>
+
+                  <div className="optimization-stat">
+                    <span>
+                      LOWER THAN CURRENT
+                    </span>
+
+                    <strong className="decision-down">
+                      {Math.abs(
+                        Number(
+                          optimization.best_window
+                            .change_vs_current || 0
+                        )
+                      ).toFixed(2)}
+                      %
+                    </strong>
+                  </div>
+
+                </div>
+
+
+                <div className="optimization-chart-section">
+
+                  <div className="optimization-chart-header">
+
+                    <div>
+                      <h3>
+                        24-Hour AI Forecast
+                      </h3>
+
+                      <p>
+                        Forecasted demand compared with historical expectations
+                      </p>
+                    </div>
+
+                    <span>
+                      NEXT 24 HOURS
+                    </span>
+
+                  </div>
+
+
+                  <div className="optimization-chart">
+
+                    {(optimization.hourly_forecast || []).map(
+                      (item, index) => {
+
+                        const predicted =
+                          Number(
+                            item.predicted_energy
+                          ) || 0;
+
+                        const baseline =
+                          Number(
+                            item.historical_baseline
+                          ) || 0;
+
+                        const allValues =
+                          (optimization.hourly_forecast || [])
+                            .flatMap((x) => [
+                              Number(x.predicted_energy) || 0,
+                              Number(x.historical_baseline) || 0
+                            ]);
+
+                        const maxValue =
+                          Math.max(
+                            ...allValues,
+                            1
+                          );
+
+                        const height =
+                          Math.max(
+                            4,
+                            (predicted / maxValue) * 100
+                          );
+
+                        const isRecommended =
+                          item.optimization_opportunity &&
+                          predicted <
+                            Number(
+                              optimization.current_energy || 0
+                            ) * 0.95;
+
+                        return (
+                          <div
+                            className={
+                              isRecommended
+                                ? "optimization-column recommended"
+                                : "optimization-column"
+                            }
+                            key={`${item.timestamp}-${index}`}
+                            title={`${item.time} — Forecast ${formatNumber(
+                              predicted,
+                              0
+                            )} kW`}
+                          >
+
+                            <div
+                              className="optimization-bar"
+                              style={{
+                                height: `${height}%`
+                              }}
+                            />
+
+                            <span>
+                              {item.time}
+                            </span>
+
+                          </div>
+                        );
+                      }
+                    )}
+
+                  </div>
+
+
+                  <div className="optimization-legend">
+
+                    <span>
+                      <i className="legend-dot forecast-dot" />
+                      AI forecast
+                    </span>
+
+                    <span>
+                      <i className="legend-dot opportunity-dot" />
+                      Optimization opportunity
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                <div className="optimization-recommendation">
+
+                  <div className="optimization-recommendation-icon">
+                    ✦
+                  </div>
+
+                  <div>
+
+                    <span>
+                      AI RECOMMENDATION
+                    </span>
+
+                    <strong>
+                      {optimization.recommendation}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+              </>
+
+            ) : (
+
+              <div className="optimization-empty">
+
+                <div className="optimization-empty-icon">
+                  ✓
+                </div>
+
+                <div>
+
+                  <span>
+                    NO SIGNIFICANT OPTIMIZATION WINDOW
+                  </span>
+
+                  <h3>
+                    Current operations are already efficient
+                  </h3>
+
+                  <p>
+                    {optimization?.recommendation ||
+                      "No meaningful lower-demand period was identified in the next 24 hours."}
+                  </p>
+
+                </div>
+
+              </div>
+
+            )}
+
+          </section>
+
+        )}
+
+
+                {/* ===================================================== */}
         {/* FOOTER */}
         {/* ===================================================== */}
 
