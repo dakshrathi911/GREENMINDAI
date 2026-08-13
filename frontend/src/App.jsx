@@ -1,19 +1,121 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000/api/dashboard";
+
+function formatNumber(value, decimals = 0) {
+  if (
+    value === null ||
+    value === undefined ||
+    Number.isNaN(Number(value))
+  ) {
+    return "—";
+  }
+
+  return Number(value).toLocaleString("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+
+/* ============================================================
+   ANOMALY HELPERS
+   ============================================================ */
+
+function getAnomalyType(anomaly) {
+  if (!anomaly) return "normal";
+
+  if (!anomaly.detected && anomaly.is_peak) {
+    return "peak";
+  }
+
+  if (!anomaly.detected) {
+    return "normal";
+  }
+
+  if (Number(anomaly.deviation) < 0) {
+    return "low";
+  }
+
+  return "high";
+}
+
+
+function getAnomalyTitle(anomaly) {
+  const type = getAnomalyType(anomaly);
+
+  if (type === "low") {
+    return "Unusually Low Energy Demand";
+  }
+
+  if (type === "high") {
+    return "Unusually High Energy Demand";
+  }
+
+  if (type === "peak") {
+    return "High-Demand Peak Detected";
+  }
+
+  return "Energy Demand Within Expected Range";
+}
+
+
+function getAnomalyBadge(anomaly) {
+  const type = getAnomalyType(anomaly);
+
+  if (type === "low") {
+    return "LOW-DEMAND ANOMALY";
+  }
+
+  if (type === "high") {
+    return "HIGH-DEMAND ANOMALY";
+  }
+
+  if (type === "peak") {
+    return "PEAK PERIOD";
+  }
+
+  return "NORMAL";
+}
+
+
+function getAnomalyIcon(anomaly) {
+  const type = getAnomalyType(anomaly);
+
+  if (type === "low") return "↓";
+  if (type === "high") return "↑";
+  if (type === "peak") return "⚡";
+
+  return "✓";
+}
+
+
+/* ============================================================
+   APP
+   ============================================================ */
 
 function App() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchDashboard = async () => {
+  /* NEW: AI INSIGHTS NAVIGATION */
+  const [activeInsight, setActiveInsight] = useState("overview");
+
+
+  /* ============================================================
+     LOAD DASHBOARD
+     ============================================================ */
+
+  async function loadDashboard() {
     try {
       const response = await fetch(API_URL);
 
       if (!response.ok) {
-        throw new Error("Backend request failed");
+        throw new Error(
+          `Backend returned ${response.status}`
+        );
       }
 
       const data = await response.json();
@@ -21,100 +123,230 @@ function App() {
       setDashboard(data);
       setError("");
     } catch (err) {
-      console.error(err);
+      console.error("Dashboard error:", err);
+
       setError(
-        "Could not connect to GreenMind AI backend."
+        "Unable to connect to the GreenMind AI backend."
       );
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+
+  /* ============================================================
+     AUTO REFRESH
+     ============================================================ */
 
   useEffect(() => {
-    fetchDashboard();
+    loadDashboard();
 
-    // Refresh dashboard every 30 seconds.
     const interval = setInterval(
-      fetchDashboard,
+      loadDashboard,
       30000
     );
 
     return () => clearInterval(interval);
   }, []);
 
-  const formatNumber = (value) => {
-    if (value === undefined || value === null) {
-      return "--";
-    }
 
-    return Number(value).toLocaleString(
-      "en-IN",
-      {
-        maximumFractionDigits: 0,
-      }
+  /* ============================================================
+     CHART DATA
+     ============================================================ */
+
+  const chartData = useMemo(() => {
+    return dashboard?.energy_history || [];
+  }, [dashboard]);
+
+
+  const maxEnergy = useMemo(() => {
+    if (!chartData.length) return 1;
+
+    return Math.max(
+      ...chartData.map(
+        (item) => Number(item.energy) || 0
+      )
     );
-  };
+  }, [chartData]);
 
-  const getPriorityClass = (priority) => {
-    switch (priority) {
-      case "high":
-        return "priority-high";
 
-      case "medium":
-        return "priority-medium";
+  /* ============================================================
+     DATA
+     ============================================================ */
 
-      default:
-        return "priority-low";
-    }
-  };
+  const anomaly = dashboard?.anomaly;
 
-  const getPriorityLabel = (priority) => {
-    switch (priority) {
-      case "high":
-        return "HIGH PRIORITY";
+  const anomalyType =
+    getAnomalyType(anomaly);
 
-      case "medium":
-        return "MEDIUM PRIORITY";
+  const prediction =
+    dashboard?.prediction;
 
-      default:
-        return "LOW PRIORITY";
-    }
-  };
+  const predictionChange =
+    Number(prediction?.change ?? 0);
 
-  const getTrendClass = (change) => {
-    if (change > 0) {
-      return "trend-up";
-    }
+  const predictionTrend =
+    predictionChange < 0
+      ? "trend-down"
+      : predictionChange > 0
+        ? "trend-up"
+        : "trend-neutral";
 
-    if (change < 0) {
-      return "trend-down";
-    }
+  const decision =
+    dashboard?.decision;
 
-    return "trend-neutral";
-  };
+  const historical =
+    dashboard?.historical_intelligence;
 
-  if (loading) {
+
+  /* ============================================================
+     LOADING SCREEN
+     ============================================================ */
+
+  if (loading && !dashboard) {
     return (
-      <div className="app loading-screen">
-        <div className="loading-card">
-          <div className="loading-spinner"></div>
+      <div className="app">
 
-          <h2>GreenMind AI</h2>
+        <header className="topbar">
 
-          <p>
-            Loading energy intelligence...
-          </p>
-        </div>
+          <div className="brand">
+
+            <div className="brand-logo">
+              🌱
+            </div>
+
+            <div>
+              <h1>
+                GreenMind AI
+              </h1>
+
+              <span>
+                Energy Intelligence Platform
+              </span>
+            </div>
+
+          </div>
+
+        </header>
+
+
+        <main className="dashboard">
+
+          <div className="loading-screen">
+
+            <div className="loading-spinner">
+              🌱
+            </div>
+
+            <p>
+              Initializing GreenMind AI...
+            </p>
+
+          </div>
+
+        </main>
+
       </div>
     );
   }
 
+
+  /* ============================================================
+     ERROR SCREEN
+     ============================================================ */
+
+  if (error && !dashboard) {
+    return (
+      <div className="app">
+
+        <header className="topbar">
+
+          <div className="brand">
+
+            <div className="brand-logo">
+              🌱
+            </div>
+
+            <div>
+              <h1>
+                GreenMind AI
+              </h1>
+
+              <span>
+                Energy Intelligence Platform
+              </span>
+            </div>
+
+          </div>
+
+
+          <div className="system-status">
+
+            <span className="status-dot error-dot" />
+
+            BACKEND OFFLINE
+
+          </div>
+
+        </header>
+
+
+        <main className="dashboard">
+
+          <div className="error-panel">
+
+            <h2>
+              GreenMind AI is unable to connect
+            </h2>
+
+            <p>
+              Start the FastAPI backend and refresh
+              the page.
+            </p>
+
+            <button
+              className="retry-button"
+              onClick={loadDashboard}
+            >
+              Retry connection
+            </button>
+
+          </div>
+
+        </main>
+
+      </div>
+    );
+  }
+
+
+  /* ============================================================
+     CORE VALUES
+     ============================================================ */
+
+  const currentEnergy =
+    dashboard?.energy_usage?.value ?? 0;
+
+  const carbon =
+    dashboard?.carbon_footprint?.value ?? 0;
+
+  const efficiency =
+    dashboard?.efficiency_score?.value ?? 0;
+
+  const confidence =
+    prediction?.confidence ?? 0;
+
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
+
   return (
     <div className="app">
 
-      {/* ================================== */}
+      {/* ===================================================== */}
       {/* HEADER */}
-      {/* ================================== */}
+      {/* ===================================================== */}
 
       <header className="topbar">
 
@@ -125,7 +357,9 @@ function App() {
           </div>
 
           <div>
-            <h1>GreenMind AI</h1>
+            <h1>
+              GreenMind AI
+            </h1>
 
             <span>
               Energy Intelligence Platform
@@ -134,9 +368,10 @@ function App() {
 
         </div>
 
+
         <div className="system-status">
 
-          <span className="status-dot"></span>
+          <span className="status-dot" />
 
           AI SYSTEM ONLINE
 
@@ -145,305 +380,576 @@ function App() {
       </header>
 
 
-      {/* ================================== */}
-      {/* ERROR */}
-      {/* ================================== */}
-
-      {error && (
-        <div className="error-banner">
-          {error}
-        </div>
-      )}
+      <main className="dashboard">
 
 
-      {dashboard && (
-        <main className="dashboard">
+        {/* ===================================================== */}
+        {/* METRICS */}
+        {/* ===================================================== */}
 
-          {/* ================================== */}
-          {/* OVERVIEW CARDS */}
-          {/* ================================== */}
+        <section className="metrics-grid">
 
-          <section className="metrics-grid">
+          <div className="metric-card">
 
-            <div className="metric-card">
+            <div className="metric-header">
 
-              <div className="metric-header">
-                <span>ENERGY USAGE</span>
-                <span className="metric-icon">
-                  ⚡
-                </span>
+              <span>
+                ENERGY USAGE ⚡
+              </span>
+
+              <div className="metric-icon">
+                ⚡
               </div>
 
-              <div className="metric-value">
-                {formatNumber(
-                  dashboard.energy_usage.value
-                )}
+            </div>
 
-                <small>
-                  {" "}
-                  {dashboard.energy_usage.unit}
-                </small>
+            <div className="metric-value">
+
+              {formatNumber(
+                currentEnergy,
+                0
+              )}
+
+              <small>
+                {" "}kW
+              </small>
+
+            </div>
+
+            <div className="metric-description">
+              Current aggregate demand
+            </div>
+
+          </div>
+
+
+          <div className="metric-card">
+
+            <div className="metric-header">
+
+              <span>
+                CARBON FOOTPRINT ◉
+              </span>
+
+              <div className="metric-icon">
+                ◉
               </div>
 
-              <div className="metric-description">
-                Current aggregate demand
+            </div>
+
+            <div className="metric-value">
+
+              {formatNumber(
+                carbon,
+                0
+              )}
+
+              <small>
+                {" "}kg
+              </small>
+
+            </div>
+
+            <div className="metric-description">
+              Estimated current emissions
+            </div>
+
+          </div>
+
+
+          <div className="metric-card">
+
+            <div className="metric-header">
+
+              <span>
+                EFFICIENCY SCORE ✦
+              </span>
+
+              <div className="metric-icon">
+                ✦
+              </div>
+
+            </div>
+
+            <div className="metric-value">
+
+              {formatNumber(
+                efficiency,
+                1
+              )}
+
+              <small>
+                {" "}%
+              </small>
+
+            </div>
+
+            <div className="metric-description">
+              Operational efficiency indicator
+            </div>
+
+            <div className="efficiency-bar">
+
+              <div
+                className="efficiency-fill"
+                style={{
+                  width: `${Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      efficiency
+                    )
+                  )}%`,
+                }}
+              />
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* ===================================================== */}
+        {/* ENERGY + FORECAST */}
+        {/* ===================================================== */}
+
+        <section className="main-grid">
+
+          {/* ENERGY DEMAND */}
+
+          <div className="panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <h2>
+                  Energy Demand
+                </h2>
+
+                <p>
+                  Last 24 hours
+                </p>
+
+              </div>
+
+              <div className="live-label">
+                ● LIVE DATA
               </div>
 
             </div>
 
 
-            <div className="metric-card">
+            <div className="chart-container">
 
-              <div className="metric-header">
-                <span>CARBON FOOTPRINT</span>
-                <span className="metric-icon">
-                  ◉
-                </span>
+              {chartData.map(
+                (item, index) => {
+
+                  const energy =
+                    Number(item.energy) || 0;
+
+                  const height =
+                    Math.max(
+                      2,
+                      (
+                        energy /
+                        maxEnergy
+                      ) * 100
+                    );
+
+                  return (
+                    <div
+                      className="chart-column"
+                      key={`${item.time}-${index}`}
+                    >
+
+                      <div
+                        className="chart-bar"
+                        style={{
+                          height:
+                            `${height}%`,
+                        }}
+                        title={`${item.time} — ${formatNumber(
+                          energy,
+                          2
+                        )} kW`}
+                      />
+
+                      <span>
+                        {item.time}
+                      </span>
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
+
+          </div>
+
+
+          {/* ================================================= */}
+          {/* AI FORECAST */}
+          {/* ================================================= */}
+
+          <div className="panel prediction-panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <h2>
+                  AI Forecast
+                </h2>
+
+                <p>
+                  Next hour
+                </p>
+
               </div>
 
-              <div className="metric-value">
-                {formatNumber(
-                  dashboard.carbon_footprint.value
-                )}
-
-                <small>
-                  {" "}
-                  {dashboard.carbon_footprint.unit}
-                </small>
-              </div>
-
-              <div className="metric-description">
-                Estimated current emissions
+              <div className="ai-badge">
+                AI
               </div>
 
             </div>
 
 
-            <div className="metric-card">
+            <div className="prediction-value">
 
-              <div className="metric-header">
-                <span>EFFICIENCY SCORE</span>
-                <span className="metric-icon">
-                  ✦
+              {formatNumber(
+                prediction?.value,
+                0
+              )}
+
+              <span>
+                kW
+              </span>
+
+            </div>
+
+
+            <div
+              className={`prediction-change ${predictionTrend}`}
+            >
+
+              {predictionChange < 0
+                ? "↓"
+                : predictionChange > 0
+                  ? "↑"
+                  : "→"}
+
+              {" "}
+
+              {Math.abs(
+                predictionChange
+              ).toFixed(2)}%
+
+              {" "}
+
+              <span>
+                predicted change
+              </span>
+
+            </div>
+
+
+            <div className="confidence-section">
+
+              <div className="confidence-header">
+
+                <span>
+                  Model confidence
                 </span>
+
+                <strong>
+                  {formatNumber(
+                    confidence,
+                    1
+                  )}%
+                </strong>
+
               </div>
 
-              <div className="metric-value">
-                {dashboard.efficiency_score.value}
 
-                <small>
-                  {" "}
-                  {dashboard.efficiency_score.unit}
-                </small>
-              </div>
-
-              <div className="efficiency-bar">
+              <div className="confidence-bar">
 
                 <div
-                  className="efficiency-fill"
+                  className="confidence-fill"
                   style={{
-                    width: `${dashboard.efficiency_score.value}%`,
+                    width: `${Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        confidence
+                      )
+                    )}%`,
                   }}
                 />
 
               </div>
 
-            </div>
 
-          </section>
-
-
-          {/* ================================== */}
-          {/* MAIN GRID */}
-          {/* ================================== */}
-
-          <section className="main-grid">
-
-
-            {/* ================================== */}
-            {/* ENERGY HISTORY */}
-            {/* ================================== */}
-
-            <div className="panel history-panel">
-
-              <div className="panel-header">
-
-                <div>
-                  <h2>Energy Demand</h2>
-
-                  <p>
-                    Last 24 hours
-                  </p>
-                </div>
-
-                <span className="live-label">
-                  ● LIVE DATA
-                </span>
-
-              </div>
-
-
-              <div className="chart-container">
-
-                {dashboard.energy_history?.map(
-                  (point, index) => {
-
-                    const values =
-                      dashboard.energy_history.map(
-                        (item) =>
-                          item.energy
-                      );
-
-                    const max =
-                      Math.max(...values);
-
-                    const height =
-                      max > 0
-                        ? (point.energy / max) * 100
-                        : 0;
-
-                    return (
-                      <div
-                        className="chart-column"
-                        key={`${point.time}-${index}`}
-                      >
-
-                        <div
-                          className="chart-bar"
-                          style={{
-                            height: `${Math.max(
-                              height,
-                              2
-                            )}%`,
-                          }}
-                          title={`${point.time}: ${formatNumber(
-                            point.energy
-                          )} kW`}
-                        />
-
-                        <span>
-                          {point.time}
-                        </span>
-
-                      </div>
-                    );
-                  }
-                )}
-
-              </div>
+              <p>
+                Based on Random Forest
+                prediction consistency
+              </p>
 
             </div>
 
 
-            {/* ================================== */}
-            {/* AI PREDICTION */}
-            {/* ================================== */}
+            <div className="prediction-source">
 
-            <div className="panel prediction-panel">
+              Based on historical data through{" "}
 
-              <div className="panel-header">
+              <strong>
+                {prediction?.based_on ||
+                  "available historical data"}
+              </strong>
 
-                <div>
-                  <h2>AI Forecast</h2>
+            </div>
 
-                  <p>
-                    {dashboard.prediction.period}
-                  </p>
-                </div>
+          </div>
 
-                <div className="ai-badge">
-                  AI
-                </div>
+        </section>
 
+
+        {/* ===================================================== */}
+        {/* AI INSIGHTS NAVIGATION */}
+        {/* ===================================================== */}
+
+        <section className="insights-navigation">
+
+          <div className="insights-nav-header">
+
+            <div>
+
+              <div className="insights-nav-label">
+                GREENMIND AI
               </div>
 
+              <h2>
+                AI Insights
+              </h2>
 
-              <div className="prediction-value">
+            </div>
 
-                {formatNumber(
-                  dashboard.prediction.value
-                )}
 
-                <span>
-                  {dashboard.prediction.unit}
+            <span className="insights-nav-description">
+              Intelligence layers generated from live energy patterns
+            </span>
+
+          </div>
+
+
+          <div className="insights-tabs">
+
+            <button
+              className={
+                activeInsight === "overview"
+                  ? "insight-tab active"
+                  : "insight-tab"
+              }
+              onClick={() =>
+                setActiveInsight("overview")
+              }
+            >
+              <span className="tab-icon">
+                ◉
+              </span>
+
+              Overview
+            </button>
+
+
+            <button
+              className={
+                activeInsight === "alerts"
+                  ? "insight-tab active"
+                  : "insight-tab"
+              }
+              onClick={() =>
+                setActiveInsight("alerts")
+              }
+            >
+              <span className="tab-icon">
+                ⚠
+              </span>
+
+              Alerts
+
+              {anomaly?.detected && (
+                <span className="tab-count alert-count">
+                  1
                 </span>
+              )}
 
-              </div>
+            </button>
 
 
-              <div
-                className={`prediction-change ${getTrendClass(
-                  dashboard.prediction.change
-                )}`}
-              >
+            <button
+              className={
+                activeInsight === "recommendations"
+                  ? "insight-tab active"
+                  : "insight-tab"
+              }
+              onClick={() =>
+                setActiveInsight("recommendations")
+              }
+            >
+              <span className="tab-icon">
+                ✦
+              </span>
 
-                {dashboard.prediction.change > 0
-                  ? "↑"
-                  : dashboard.prediction.change < 0
-                  ? "↓"
-                  : "→"}
+              Recommendations
 
-                {" "}
-
-                {Math.abs(
-                  dashboard.prediction.change
-                ).toFixed(2)}
-                %
-
-                <span>
-                  {" "}
-                  predicted change
+              {dashboard?.recommendations?.length > 0 && (
+                <span className="tab-count">
+                  {dashboard.recommendations.length}
                 </span>
+              )}
 
-              </div>
+            </button>
 
 
-              {/* Confidence */}
+            <button
+              className={
+                activeInsight === "decision"
+                  ? "insight-tab active"
+                  : "insight-tab"
+              }
+              onClick={() =>
+                setActiveInsight("decision")
+              }
+            >
+              <span className="tab-icon">
+                ◈
+              </span>
 
-              <div className="confidence-section">
+              Decision
+            </button>
 
-                <div className="confidence-header">
 
-                  <span>
-                    Model confidence
-                  </span>
+            <button
+              className={
+                activeInsight === "historical"
+                  ? "insight-tab active"
+                  : "insight-tab"
+              }
+              onClick={() =>
+                setActiveInsight("historical")
+              }
+            >
+              <span className="tab-icon">
+                ◌
+              </span>
 
-                  <strong>
-                    {dashboard.prediction.confidence?.toFixed(
-                      1
-                    )}
-                    %
-                  </strong>
+              Historical
+            </button>
 
+          </div>
+
+        </section>
+
+
+        {/* ===================================================== */}
+        {/* OVERVIEW */}
+        {/* ===================================================== */}
+
+        {activeInsight === "overview" && (
+
+          <section className="panel insights-overview-panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <div className="decision-label">
+                  GREENMIND AI
                 </div>
 
-
-                <div className="confidence-bar">
-
-                  <div
-                    className="confidence-fill"
-                    style={{
-                      width: `${dashboard.prediction.confidence || 0}%`,
-                    }}
-                  />
-
-                </div>
-
+                <h2>
+                  Intelligence Overview
+                </h2>
 
                 <p>
-                  Based on Random Forest
-                  prediction consistency
+                  Current AI interpretation of energy conditions
+                </p>
+
+              </div>
+
+              <div className="recommendation-icon">
+                ✦
+              </div>
+
+            </div>
+
+
+            <div className="overview-grid">
+
+              <div className="overview-card">
+
+                <span>
+                  CURRENT CONDITION
+                </span>
+
+                <strong>
+                  {historical?.status === "low"
+                    ? "LOW DEMAND"
+                    : historical?.status === "high"
+                      ? "HIGH DEMAND"
+                      : "NORMAL"}
+                </strong>
+
+                <p>
+                  {historical?.insight ||
+                    "Energy demand is currently being evaluated."}
                 </p>
 
               </div>
 
 
-              <div className="prediction-source">
+              <div className="overview-card">
 
-                Based on historical data through{" "}
+                <span>
+                  AI DECISION
+                </span>
+
                 <strong>
-                  {dashboard.prediction.based_on}
+                  {decision?.decision ||
+                    "MAINTAIN CURRENT OPERATION"}
                 </strong>
+
+                <p>
+                  {decision?.summary ||
+                    "No significant intervention is currently required."}
+                </p>
+
+              </div>
+
+
+              <div className="overview-card">
+
+                <span>
+                  NEXT HOUR
+                </span>
+
+                <strong>
+                  {formatNumber(
+                    prediction?.value,
+                    0
+                  )} kW
+                </strong>
+
+                <p>
+                  {predictionChange < 0
+                    ? "Demand is expected to decrease."
+                    : predictionChange > 0
+                      ? "Demand is expected to increase."
+                      : "Demand is expected to remain stable."}
+                </p>
 
               </div>
 
@@ -451,10 +957,167 @@ function App() {
 
           </section>
 
+        )}
 
-          {/* ================================== */}
-          {/* AI RECOMMENDATIONS */}
-          {/* ================================== */}
+
+        {/* ===================================================== */}
+        {/* ALERTS */}
+        {/* ===================================================== */}
+
+        {activeInsight === "alerts" && (
+
+          <section
+            className={`panel anomaly-panel anomaly-${anomalyType}`}
+          >
+
+            <div className="anomaly-content">
+
+              <div className="anomaly-icon">
+                {getAnomalyIcon(anomaly)}
+              </div>
+
+
+              <div className="anomaly-main">
+
+                <div className="anomaly-heading">
+
+                  <div>
+
+                    <div className="anomaly-label">
+                      AI ENERGY ALERT
+                    </div>
+
+                    <h2>
+                      {getAnomalyTitle(anomaly)}
+                    </h2>
+
+                  </div>
+
+
+                  <span className="anomaly-badge">
+                    {getAnomalyBadge(anomaly)}
+                  </span>
+
+                </div>
+
+
+                <p className="anomaly-message">
+
+                  {anomaly?.message ||
+                    "Energy demand is within the expected historical range."}
+
+                </p>
+
+
+                <div className="anomaly-stats">
+
+                  <div className="anomaly-stat">
+
+                    <span>
+                      Current
+                    </span>
+
+                    <strong>
+                      {formatNumber(
+                        anomaly?.current_energy,
+                        0
+                      )} kW
+                    </strong>
+
+                  </div>
+
+
+                  <div className="anomaly-stat">
+
+                    <span>
+                      Expected
+                    </span>
+
+                    <strong>
+                      {formatNumber(
+                        anomaly?.expected_energy,
+                        0
+                      )} kW
+                    </strong>
+
+                  </div>
+
+
+                  <div className="anomaly-stat">
+
+                    <span>
+                      Deviation
+                    </span>
+
+                    <strong
+                      className={
+                        Number(
+                          anomaly?.deviation
+                        ) < 0
+                          ? "anomaly-negative"
+                          : "anomaly-positive"
+                      }
+                    >
+
+                      {Number(
+                        anomaly?.deviation ?? 0
+                      ) > 0
+                        ? "+"
+                        : ""}
+
+                      {Number(
+                        anomaly?.deviation ?? 0
+                      ).toFixed(2)}%
+
+                    </strong>
+
+                  </div>
+
+
+                  <div className="anomaly-stat">
+
+                    <span>
+                      Z-score
+                    </span>
+
+                    <strong>
+                      {Number(
+                        anomaly?.z_score ?? 0
+                      ).toFixed(2)}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+
+                <div className="anomaly-recommendation">
+
+                  <span>
+                    💡 AI recommendation
+                  </span>
+
+                  <strong>
+                    {anomaly?.recommendation ||
+                      "No immediate action is required."}
+                  </strong>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* ===================================================== */}
+        {/* RECOMMENDATIONS */}
+        {/* ===================================================== */}
+
+        {activeInsight === "recommendations" && (
 
           <section className="panel recommendations-panel">
 
@@ -467,8 +1130,8 @@ function App() {
                 </h2>
 
                 <p>
-                  Actions generated from
-                  current energy patterns
+                  Actions generated from current
+                  energy patterns
                 </p>
 
               </div>
@@ -482,88 +1145,535 @@ function App() {
 
             <div className="recommendations-list">
 
-              {dashboard.recommendations?.map(
-                (recommendation, index) => (
+              {(
+                dashboard?.recommendations ||
+                []
+              ).map(
+                (recommendation, index) => {
 
-                  <div
-                    className={`recommendation-card ${getPriorityClass(
-                      recommendation.priority
-                    )}`}
-                    key={index}
-                  >
+                  const priority =
+                    (
+                      recommendation.priority ||
+                      "low"
+                    ).toLowerCase();
 
-                    <div className="recommendation-top">
+                  return (
+                    <div
+                      className={`recommendation-card priority-${priority}`}
+                      key={`${recommendation.title}-${index}`}
+                    >
 
-                      <span
-                        className={`priority-badge ${getPriorityClass(
-                          recommendation.priority
-                        )}`}
-                      >
-                        {getPriorityLabel(
-                          recommendation.priority
-                        )}
-                      </span>
+                      <div className="recommendation-top">
+
+                        <span
+                          className={`priority-badge priority-${priority}`}
+                        >
+                          {priority.toUpperCase()}
+                          {" "}
+                          PRIORITY
+                        </span>
+
+                      </div>
+
+
+                      <h3>
+                        {recommendation.title}
+                      </h3>
+
+
+                      <p>
+                        {recommendation.description}
+                      </p>
+
+
+                      <div className="recommendation-saving">
+
+                        <span>
+                          Potential impact
+                        </span>
+
+                        <strong>
+                          {recommendation.saving}
+                        </strong>
+
+                      </div>
 
                     </div>
-
-
-                    <h3>
-                      {recommendation.title}
-                    </h3>
-
-
-                    <p>
-                      {recommendation.description}
-                    </p>
-
-
-                    <div className="recommendation-saving">
-
-                      <span>
-                        Potential impact
-                      </span>
-
-                      <strong>
-                        {recommendation.saving}
-                      </strong>
-
-                    </div>
-
-                  </div>
-
-                )
+                  );
+                }
               )}
 
             </div>
 
           </section>
 
+        )}
 
-          {/* ================================== */}
-          {/* FOOTER */}
-          {/* ================================== */}
 
-          <footer>
+        {/* ===================================================== */}
+        {/* DECISION CENTER */}
+        {/* ===================================================== */}
 
-            <span>
-              GreenMind AI
-            </span>
+        {activeInsight === "decision" && (
 
-            <span>
-              AI-powered energy intelligence
-            </span>
+          <section
+            className={`panel decision-panel decision-${decision?.status || "stable"}`}
+          >
 
-            <span>
-              ● System operational
-            </span>
+            <div className="decision-header">
 
-          </footer>
+              <div>
 
-        </main>
-      )}
+                <div className="decision-label">
+                  GREENMIND AI
+                </div>
+
+                <h2>
+                  Decision Center
+                </h2>
+
+                <p>
+                  Recommended action based on
+                  current energy conditions
+                </p>
+
+              </div>
+
+              <div className="decision-ai-badge">
+                AI
+              </div>
+
+            </div>
+
+
+            <div className="decision-body">
+
+              <div className="decision-main">
+
+                <span className="decision-status">
+
+                  {decision?.status === "opportunity"
+                    ? "OPPORTUNITY"
+                    : decision?.status === "warning"
+                      ? "ATTENTION"
+                      : "STABLE"}
+
+                </span>
+
+
+                <h3>
+                  {decision?.decision ||
+                    "Maintain current operation"}
+                </h3>
+
+
+                <p>
+                  {decision?.summary ||
+                    "Energy demand is currently within the expected range."}
+                </p>
+
+              </div>
+
+
+              <div className="decision-metrics">
+
+                <div className="decision-metric">
+
+                  <span>
+                    CURRENT
+                  </span>
+
+                  <strong>
+                    {formatNumber(
+                      decision?.current_energy,
+                      0
+                    )} kW
+                  </strong>
+
+                </div>
+
+
+                <div className="decision-metric">
+
+                  <span>
+                    NEXT HOUR
+                  </span>
+
+                  <strong>
+                    {formatNumber(
+                      decision?.predicted_energy,
+                      0
+                    )} kW
+                  </strong>
+
+                </div>
+
+
+                <div className="decision-metric">
+
+                  <span>
+                    CHANGE
+                  </span>
+
+                  <strong
+                    className={
+                      Number(
+                        decision?.predicted_change || 0
+                      ) < 0
+                        ? "decision-down"
+                        : Number(
+                            decision?.predicted_change || 0
+                          ) > 0
+                          ? "decision-up"
+                          : ""
+                    }
+                  >
+
+                    {Number(
+                      decision?.predicted_change || 0
+                    ) > 0
+                      ? "+"
+                      : ""}
+
+                    {Number(
+                      decision?.predicted_change || 0
+                    ).toFixed(2)}%
+
+                  </strong>
+
+                </div>
+
+
+                <div className="decision-metric">
+
+                  <span>
+                    CONFIDENCE
+                  </span>
+
+                  <strong>
+                    {formatNumber(
+                      decision?.confidence,
+                      1
+                    )}%
+                  </strong>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div className="decision-action">
+
+              <div className="decision-action-icon">
+                💡
+              </div>
+
+              <div>
+
+                <span>
+                  RECOMMENDED ACTION
+                </span>
+
+                <strong>
+                  {decision?.action ||
+                    "Continue normal operations."}
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div className="decision-reason">
+
+              <span>
+                Why GreenMind recommends this
+              </span>
+
+              <strong>
+                {decision?.reason ||
+                  "No significant demand deviation requires immediate intervention."}
+              </strong>
+
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* ===================================================== */}
+        {/* HISTORICAL INTELLIGENCE */}
+        {/* ===================================================== */}
+
+        {activeInsight === "historical" && (
+
+          <section className="panel historical-panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <div className="decision-label">
+                  GREENMIND AI
+                </div>
+
+                <h2>
+                  Historical Intelligence
+                </h2>
+
+                <p>
+                  Current demand compared with historical operating patterns
+                </p>
+
+              </div>
+
+              <div className="recommendation-icon">
+                ◌
+              </div>
+
+            </div>
+
+
+            <div className="historical-status">
+
+              <div className="historical-status-icon">
+                {historical?.status === "low"
+                  ? "↓"
+                  : historical?.status === "high"
+                    ? "↑"
+                    : "✓"}
+              </div>
+
+              <div>
+
+                <span>
+                  CURRENT HISTORICAL STATE
+                </span>
+
+                <strong>
+                  {historical?.status === "low"
+                    ? "LOW DEMAND"
+                    : historical?.status === "high"
+                      ? "HIGH DEMAND"
+                      : "NORMAL"}
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div className="historical-grid">
+
+              <div className="historical-card">
+
+                <span>
+                  CURRENT DEMAND
+                </span>
+
+                <strong>
+                  {formatNumber(
+                    historical?.current_energy,
+                    0
+                  )} kW
+                </strong>
+
+              </div>
+
+
+              <div className="historical-card">
+
+                <span>
+                  SAME-HOUR AVERAGE
+                </span>
+
+                <strong>
+                  {formatNumber(
+                    historical?.same_hour_average,
+                    0
+                  )} kW
+                </strong>
+
+              </div>
+
+
+              <div className="historical-card">
+
+                <span>
+                  SAME WEEKDAY / HOUR
+                </span>
+
+                <strong>
+                  {formatNumber(
+                    historical?.same_weekday_hour_average,
+                    0
+                  )} kW
+                </strong>
+
+              </div>
+
+
+              <div className="historical-card">
+
+                <span>
+                  7-DAY AVERAGE
+                </span>
+
+                <strong>
+                  {formatNumber(
+                    historical?.weekly_average,
+                    0
+                  )} kW
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div className="historical-comparison">
+
+              <div className="historical-comparison-item">
+
+                <span>
+                  VS SAME HOUR
+                </span>
+
+                <strong
+                  className={
+                    Number(
+                      historical?.current_vs_same_hour
+                    ) < 0
+                      ? "decision-down"
+                      : "decision-up"
+                  }
+                >
+
+                  {Number(
+                    historical?.current_vs_same_hour ?? 0
+                  ) > 0
+                    ? "+"
+                    : ""}
+
+                  {Number(
+                    historical?.current_vs_same_hour ?? 0
+                  ).toFixed(2)}%
+
+                </strong>
+
+              </div>
+
+
+              <div className="historical-comparison-item">
+
+                <span>
+                  VS WEEKDAY / HOUR
+                </span>
+
+                <strong
+                  className={
+                    Number(
+                      historical?.current_vs_weekday_hour
+                    ) < 0
+                      ? "decision-down"
+                      : "decision-up"
+                  }
+                >
+
+                  {Number(
+                    historical?.current_vs_weekday_hour ?? 0
+                  ) > 0
+                    ? "+"
+                    : ""}
+
+                  {Number(
+                    historical?.current_vs_weekday_hour ?? 0
+                  ).toFixed(2)}%
+
+                </strong>
+
+              </div>
+
+
+              <div className="historical-comparison-item">
+
+                <span>
+                  VS RECENT WEEK
+                </span>
+
+                <strong
+                  className={
+                    Number(
+                      historical?.current_vs_week
+                    ) < 0
+                      ? "decision-down"
+                      : "decision-up"
+                  }
+                >
+
+                  {Number(
+                    historical?.current_vs_week ?? 0
+                  ) > 0
+                    ? "+"
+                    : ""}
+
+                  {Number(
+                    historical?.current_vs_week ?? 0
+                  ).toFixed(2)}%
+
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div className="historical-insight">
+
+              <span>
+                ✦ AI HISTORICAL INSIGHT
+              </span>
+
+              <strong>
+                {historical?.insight ||
+                  "Historical intelligence is currently unavailable."}
+              </strong>
+
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* ===================================================== */}
+        {/* FOOTER */}
+        {/* ===================================================== */}
+
+        <footer>
+
+          <span>
+            GreenMind AI
+          </span>
+
+          <span>
+            AI-powered energy intelligence
+            {" "}
+            •
+            {" "}
+            System operational
+          </span>
+
+        </footer>
+
+      </main>
 
     </div>
   );
 }
+
 
 export default App;
