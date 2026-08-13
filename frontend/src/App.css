@@ -861,3 +861,90 @@ button {
     padding: 22px 16px;
   }
 } 
+/* =========================================
+   LOADING / ERROR SCREEN
+========================================= */
+
+.loading-screen {
+  min-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(168, 255, 62, 0.16),
+      transparent 35%
+    ),
+    #f7faf5;
+
+  text-align: center;
+}
+
+.loading-logo {
+  width: 70px;
+  height: 70px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 20px;
+
+  background: #a8ff3e;
+
+  box-shadow:
+    0 10px 30px rgba(168, 255, 62, 0.3);
+
+  overflow: hidden;
+
+  margin-bottom: 20px;
+}
+
+.loading-logo img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: contain;
+
+  padding: 8px;
+}
+
+.loading-screen h2 {
+  margin: 0;
+
+  color: #142016;
+
+  font-size: 24px;
+}
+
+.loading-screen p {
+  margin: 8px 0 20px;
+
+  color: #7c8b7b;
+
+  font-size: 12px;
+}
+
+.error-icon {
+  width: 60px;
+  height: 60px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 20px;
+
+  border-radius: 50%;
+
+  background: #fff0e8;
+
+  color: #e4773d;
+
+  font-size: 25px;
+  font-weight: 800;
+}
