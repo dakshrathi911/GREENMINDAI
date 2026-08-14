@@ -56,6 +56,7 @@ class EnergyStreamSimulator:
     def current(self):
         with self.lock:
             row = self.data.iloc[self.index]
+            self._sync_backend_state()
             return self._serialize(row)
 
     def advance(self):
@@ -66,12 +67,31 @@ class EnergyStreamSimulator:
             else:
                 self.index += 1
 
+            self._sync_backend_state()
             return self._serialize(self.data.iloc[self.index])
 
     def reset(self):
         with self.lock:
             self.index = 168
+            self._sync_backend_state()
             return self._serialize(self.data.iloc[self.index])
+
+    def active_history(self):
+        """Return all observations available to the AI up to the live point."""
+        with self.lock:
+            return self.data.iloc[: self.index + 1].copy()
+
+    def _sync_backend_state(self):
+        """Make the existing backend AI use the current simulated stream point.
+
+        The import is intentionally deferred until request time to avoid a
+        circular import while FastAPI loads the live simulator router.
+        """
+        import sys
+
+        backend_main = sys.modules.get("backend.main")
+        if backend_main is not None:
+            backend_main.energy_df = self.data.iloc[: self.index + 1].copy()
 
     def _serialize(self, row):
         return {
@@ -90,7 +110,7 @@ simulator = EnergyStreamSimulator(DATA_PATH)
 
 @router.get("/status")
 def live_status():
-    """Return the current simulated telemetry reading."""
+    """Return the current simulated telemetry reading and sync the AI state."""
     reading = simulator.current()
     return {
         "status": "live_simulation",
