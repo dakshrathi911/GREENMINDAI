@@ -333,7 +333,7 @@ def optimize():
 
     formatted_windows.sort(
         key=lambda x: (
-            -x["saving_vs_current"],
+            -x["change_vs_current"],
             -x["saving_vs_historical_baseline"],
             -x["confidence"],
         )
