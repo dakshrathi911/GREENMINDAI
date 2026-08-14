@@ -181,9 +181,9 @@ function App() {
             <div className="metric-description">Estimated current emissions</div>
           </div>
           <div className="metric-card">
-            <div className="metric-header"><span>EFFICIENCY SCORE ✦</span><div className="metric-icon">✦</div></div>
+            <div className="metric-header"><span>ENERGY PERFORMANCE ✦</span><div className="metric-icon">✦</div></div>
             <div className="metric-value">{formatNumber(efficiency, 1)}<small> %</small></div>
-            <div className="metric-description">Operational efficiency indicator</div>
+            <div className="metric-description">Performance vs recent energy baseline</div>
             <div className="efficiency-bar"><div className="efficiency-fill" style={{ width: `${Math.max(0, Math.min(100, efficiency))}%` }} /></div>
           </div>
         </section>
