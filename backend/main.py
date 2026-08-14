@@ -460,7 +460,7 @@ def generate_prediction():
 
 
 # ============================================================
-# EFFICIENCY SCORE
+# ENERGY PERFORMANCE
 # ============================================================
 
 def calculate_efficiency():
@@ -469,33 +469,38 @@ def calculate_efficiency():
         return 0
 
     current = float(
-        energy_df.iloc[-1][
-            "total_energy"
-        ]
+        energy_df.iloc[-1]["total_energy"]
     )
 
-    recent = energy_df[
-        "total_energy"
-    ].tail(168)
+    recent = (
+        energy_df["total_energy"]
+        .tail(168)
+        .iloc[:-1]
+    )
 
     if len(recent) == 0:
         return 0
 
-    expected = float(
+    baseline = float(
         recent.mean()
     )
 
-    if expected <= 0:
-        return 100
+    if baseline <= 0:
+        return 0
 
-    ratio = current / expected
+    # This is a relative energy-performance score,
+    # NOT a physical data-center efficiency/PUE metric.
+    #
+    # 100 = current demand equals or is below baseline
+    # Lower scores indicate demand above the recent baseline.
+    deviation = (
+        (current - baseline)
+        / baseline
+    ) * 100
 
-    # Lower demand than expected means better
-    # operational efficiency.
     score = (
         100
-        - abs(ratio - 0.75)
-        * 100
+        - max(0, deviation)
     )
 
     score = max(
@@ -511,7 +516,6 @@ def calculate_efficiency():
         1
     )
 
-
 # ============================================================
 # CARBON FOOTPRINT
 # ============================================================
@@ -521,27 +525,31 @@ def calculate_carbon():
     if energy_df is None:
         return 0
 
-    current_energy = float(
-        energy_df.iloc[-1][
-            "total_energy"
-        ]
+    current_power_kw = float(
+        energy_df.iloc[-1]["total_energy"]
     )
 
-    # Estimated emission factor.
-    # This is a dashboard estimate rather than
-    # a location-specific real-time grid factor.
-    emission_factor = 0.000676
+    # The dataset contains hourly power values in kW.
+    # For a one-hour interval:
+    #
+    # kW × 1 hour = kWh
+    #
+    # This is an estimated grid emission factor.
+    # It should eventually be replaced with a configurable,
+    # location/time-specific carbon intensity.
+    emission_factor_kg_per_kwh = 0.676
 
-    carbon = (
-        current_energy
-        * emission_factor
+    energy_kwh = current_power_kw * 1.0
+
+    carbon_kg = (
+        energy_kwh
+        * emission_factor_kg_per_kwh
     )
 
     return round(
-        carbon,
+        carbon_kg,
         2
     )
-
 
 # ============================================================
 # ENERGY HISTORY
