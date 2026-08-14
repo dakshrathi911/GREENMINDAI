@@ -16,18 +16,8 @@ import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-MODEL_PATH = (
-    BASE_DIR
-    / "models"
-    / "energy_forecaster.joblib"
-)
-
-DATA_PATH = (
-    BASE_DIR
-    / "data"
-    / "processed"
-    / "hourly_energy.csv"
-)
+MODEL_PATH = BASE_DIR / "models" / "energy_forecaster.joblib"
+DATA_PATH = BASE_DIR / "data" / "processed" / "hourly_energy.csv"
 
 
 # ============================================================
@@ -58,7 +48,6 @@ FEATURES = [
 print("=" * 60)
 print("GREENMIND AI - 24-HOUR ENERGY OPTIMIZATION")
 print("=" * 60)
-
 print()
 print("[1/5] Loading forecasting model...")
 
@@ -75,31 +64,16 @@ print()
 print("[2/5] Loading electricity dataset...")
 
 df = pd.read_csv(DATA_PATH)
-
-df["timestamp"] = pd.to_datetime(
-    df["timestamp"]
-)
-
-df["total_energy"] = pd.to_numeric(
-    df["total_energy"],
-    errors="coerce"
-)
+df["timestamp"] = pd.to_datetime(df["timestamp"])
+df["total_energy"] = pd.to_numeric(df["total_energy"], errors="coerce")
 
 df = (
-    df
-    .dropna(
-        subset=[
-            "timestamp",
-            "total_energy",
-        ]
-    )
+    df.dropna(subset=["timestamp", "total_energy"])
     .sort_values("timestamp")
     .reset_index(drop=True)
 )
 
-print(
-    f"Loaded {len(df)} hourly observations."
-)
+print(f"Loaded {len(df)} hourly observations.")
 
 
 # ============================================================
@@ -107,61 +81,19 @@ print(
 # ============================================================
 
 def add_features(data):
-
     data = data.copy()
 
-    data["hour"] = (
-        data["timestamp"].dt.hour
-    )
-
-    data["day_of_week"] = (
-        data["timestamp"].dt.dayofweek
-    )
-
-    data["day_of_month"] = (
-        data["timestamp"].dt.day
-    )
-
-    data["month"] = (
-        data["timestamp"].dt.month
-    )
-
-    data["is_weekend"] = (
-        data["day_of_week"] >= 5
-    ).astype(int)
-
-    data["lag_1"] = (
-        data["total_energy"].shift(1)
-    )
-
-    data["lag_24"] = (
-        data["total_energy"].shift(24)
-    )
-
-    data["lag_168"] = (
-        data["total_energy"].shift(168)
-    )
-
-    data["rolling_mean_24"] = (
-        data["total_energy"]
-        .shift(1)
-        .rolling(24)
-        .mean()
-    )
-
-    data["rolling_std_24"] = (
-        data["total_energy"]
-        .shift(1)
-        .rolling(24)
-        .std()
-    )
-
-    data["rolling_mean_168"] = (
-        data["total_energy"]
-        .shift(1)
-        .rolling(168)
-        .mean()
-    )
+    data["hour"] = data["timestamp"].dt.hour
+    data["day_of_week"] = data["timestamp"].dt.dayofweek
+    data["day_of_month"] = data["timestamp"].dt.day
+    data["month"] = data["timestamp"].dt.month
+    data["is_weekend"] = (data["day_of_week"] >= 5).astype(int)
+    data["lag_1"] = data["total_energy"].shift(1)
+    data["lag_24"] = data["total_energy"].shift(24)
+    data["lag_168"] = data["total_energy"].shift(168)
+    data["rolling_mean_24"] = data["total_energy"].shift(1).rolling(24).mean()
+    data["rolling_std_24"] = data["total_energy"].shift(1).rolling(24).std()
+    data["rolling_mean_168"] = data["total_energy"].shift(1).rolling(168).mean()
 
     return data
 
@@ -170,250 +102,84 @@ def add_features(data):
 # HISTORICAL BASELINE
 # ============================================================
 
-def historical_baseline(
-    timestamp,
-    data
-):
-
+def historical_baseline(timestamp, data):
     hour = timestamp.hour
     weekday = timestamp.dayofweek
 
-    # Same weekday + same hour
     matching = data[
-        (
-            data["timestamp"].dt.hour
-            == hour
-        )
-        &
-        (
-            data["timestamp"].dt.dayofweek
-            == weekday
-        )
-    ]
-
-    # Don't use the final current observation
-    matching = matching.iloc[:-1]
-
-    if len(matching) >= 10:
-
-        values = (
-            matching[
-                "total_energy"
-            ]
-            .tail(52)
-        )
-
-        return float(
-            values.mean()
-        )
-
-    # Same hour fallback
-    matching = data[
-        data["timestamp"].dt.hour
-        == hour
+        (data["timestamp"].dt.hour == hour)
+        & (data["timestamp"].dt.dayofweek == weekday)
     ].iloc[:-1]
 
     if len(matching) >= 10:
+        values = matching["total_energy"].tail(52)
+        return float(values.mean())
 
-        values = (
-            matching[
-                "total_energy"
-            ]
-            .tail(90)
-        )
+    matching = data[data["timestamp"].dt.hour == hour].iloc[:-1]
 
-        return float(
-            values.mean()
-        )
+    if len(matching) >= 10:
+        values = matching["total_energy"].tail(90)
+        return float(values.mean())
 
-    return float(
-        data[
-            "total_energy"
-        ]
-        .tail(168)
-        .mean()
-    )
+    return float(data["total_energy"].tail(168).mean())
 
 
 # ============================================================
 # FORECAST CONFIDENCE
 # ============================================================
 
-def calculate_confidence(
-    timestamp,
-    baseline,
-    data
-):
-
+def calculate_confidence(timestamp, baseline, data):
     hour = timestamp.hour
     weekday = timestamp.dayofweek
 
     samples = data[
-        (
-            data["timestamp"].dt.hour
-            == hour
-        )
-        &
-        (
-            data["timestamp"].dt.dayofweek
-            == weekday
-        )
+        (data["timestamp"].dt.hour == hour)
+        & (data["timestamp"].dt.dayofweek == weekday)
     ].iloc[:-1]
 
     if len(samples) < 5:
-
         return 70.0
 
-    values = (
-        samples[
-            "total_energy"
-        ]
-        .tail(52)
-    )
-
-    std = float(
-        values.std()
-    )
+    values = samples["total_energy"].tail(52)
+    std = float(values.std())
 
     if not np.isfinite(std):
-
         std = 0
 
-    variability = (
-        std
-        / max(
-            baseline,
-            1
-        )
-    )
+    variability = std / max(baseline, 1)
+    sample_factor = min(1.0, len(values) / 52)
+    variability_factor = 1 / (1 + variability)
 
-    sample_factor = min(
-        1.0,
-        len(values) / 52
-    )
+    confidence = 70 + 25 * sample_factor * variability_factor
 
-    variability_factor = (
-        1
-        / (
-            1
-            + variability
-        )
-    )
-
-    confidence = (
-        70
-        + 25
-        * sample_factor
-        * variability_factor
-    )
-
-    return round(
-        max(
-            60,
-            min(
-                95,
-                confidence
-            )
-        ),
-        1
-    )
+    return round(max(60, min(95, confidence)), 1)
 
 
 # ============================================================
 # CREATE NEXT-HOUR MODEL FEATURES
 # ============================================================
 
-def create_prediction_row(
-    history,
-    future_timestamp
-):
-
-    temp = history.copy()
-
-    # Current historical values
-    values = (
-        temp[
-            "total_energy"
-        ]
-        .tolist()
-    )
+def create_prediction_row(history, future_timestamp):
+    values = history["total_energy"].tolist()
 
     if len(values) < 168:
-
-        raise ValueError(
-            "At least 168 historical "
-            "hours are required."
-        )
-
-    lag_1 = values[-1]
-
-    lag_24 = values[-24]
-
-    lag_168 = values[-168]
-
-    rolling_24 = (
-        pd.Series(
-            values[-24:]
-        )
-        .mean()
-    )
-
-    rolling_std_24 = (
-        pd.Series(
-            values[-24:]
-        )
-        .std()
-    )
-
-    rolling_168 = (
-        pd.Series(
-            values[-168:]
-        )
-        .mean()
-    )
+        raise ValueError("At least 168 historical hours are required.")
 
     row = {
-        "hour":
-            future_timestamp.hour,
-
-        "day_of_week":
-            future_timestamp.dayofweek,
-
-        "day_of_month":
-            future_timestamp.day,
-
-        "month":
-            future_timestamp.month,
-
-        "is_weekend":
-            int(
-                future_timestamp.dayofweek
-                >= 5
-            ),
-
-        "lag_1":
-            lag_1,
-
-        "lag_24":
-            lag_24,
-
-        "lag_168":
-            lag_168,
-
-        "rolling_mean_24":
-            rolling_24,
-
-        "rolling_std_24":
-            rolling_std_24,
-
-        "rolling_mean_168":
-            rolling_168,
+        "hour": future_timestamp.hour,
+        "day_of_week": future_timestamp.dayofweek,
+        "day_of_month": future_timestamp.day,
+        "month": future_timestamp.month,
+        "is_weekend": int(future_timestamp.dayofweek >= 5),
+        "lag_1": values[-1],
+        "lag_24": values[-24],
+        "lag_168": values[-168],
+        "rolling_mean_24": pd.Series(values[-24:]).mean(),
+        "rolling_std_24": pd.Series(values[-24:]).std(),
+        "rolling_mean_168": pd.Series(values[-168:]).mean(),
     }
 
-    return pd.DataFrame(
-        [row],
-        columns=FEATURES
-    )
+    return pd.DataFrame([row], columns=FEATURES)
 
 
 # ============================================================
@@ -425,96 +191,32 @@ print("[3/5] Generating 24-hour AI forecast...")
 
 
 def generate_forecast():
-
     history = df.copy()
-
     forecasts = []
+    current_timestamp = history.iloc[-1]["timestamp"]
 
-    current_timestamp = (
-        history.iloc[-1][
-            "timestamp"
-        ]
-    )
+    for hour_offset in range(1, FORECAST_HOURS + 1):
+        future_timestamp = current_timestamp + pd.Timedelta(hours=hour_offset)
 
-    # --------------------------------------------------------
-    # Recursive forecasting
-    #
-    # Each prediction becomes part of the history used
-    # for the following hour.
-    # --------------------------------------------------------
-
-    for hour_offset in range(
-        1,
-        FORECAST_HOURS + 1
-    ):
-
-        future_timestamp = (
-            current_timestamp
-            + pd.Timedelta(
-                hours=hour_offset
-            )
-        )
-
-        X = create_prediction_row(
-            history,
-            future_timestamp
-        )
-
-        prediction = float(
-            model.predict(X)[0]
-        )
-
-        # Avoid impossible negative demand
-        prediction = max(
-            0,
-            prediction
-        )
-
-        baseline = (
-            historical_baseline(
-                future_timestamp,
-                df
-            )
-        )
-
-        confidence = (
-            calculate_confidence(
-                future_timestamp,
-                baseline,
-                df
-            )
-        )
+        X = create_prediction_row(history, future_timestamp)
+        prediction = max(0, float(model.predict(X)[0]))
+        baseline = historical_baseline(future_timestamp, df)
+        confidence = calculate_confidence(future_timestamp, baseline, df)
 
         forecasts.append(
             {
-                "timestamp":
-                    future_timestamp,
-
-                "predicted_energy":
-                    prediction,
-
-                "historical_baseline":
-                    baseline,
-
-                "confidence":
-                    confidence,
+                "timestamp": future_timestamp,
+                "predicted_energy": prediction,
+                "historical_baseline": baseline,
+                "confidence": confidence,
             }
         )
 
-        # Add prediction to temporary history
         history = pd.concat(
             [
                 history,
                 pd.DataFrame(
-                    [
-                        {
-                            "timestamp":
-                                future_timestamp,
-
-                            "total_energy":
-                                prediction,
-                        }
-                    ]
+                    [{"timestamp": future_timestamp, "total_energy": prediction}]
                 ),
             ],
             ignore_index=True,
@@ -532,593 +234,157 @@ print("[4/5] Finding optimal energy windows...")
 
 
 def optimize():
-
     forecasts = generate_forecast()
 
-    current_timestamp = (
-        df.iloc[-1]["timestamp"]
-    )
+    current_timestamp = df.iloc[-1]["timestamp"]
+    current_energy = float(df.iloc[-1]["total_energy"])
 
-    current_energy = float(
-        df.iloc[-1]["total_energy"]
-    )
-
-    # Current historical baseline
-    current_baseline = (
-        historical_baseline(
-            current_timestamp,
-            df
-        )
-    )
-
-    current_vs_baseline = (
-        (
-            current_energy
-            - current_baseline
-        )
-        / current_baseline
-    ) * 100
-
-    current_is_low = (
-        current_vs_baseline <= -5
-    )
-
-    # --------------------------------------------------------
-    # Calculate optimization metrics
-    # --------------------------------------------------------
+    current_baseline = historical_baseline(current_timestamp, df)
+    current_vs_baseline = ((current_energy - current_baseline) / current_baseline) * 100
+    current_is_low = current_vs_baseline <= -5
 
     for item in forecasts:
+        prediction = item["predicted_energy"]
+        baseline = item["historical_baseline"]
 
-        prediction = item[
-            "predicted_energy"
-        ]
+        vs_baseline = ((prediction - baseline) / baseline) * 100
+        vs_current = ((prediction - current_energy) / current_energy) * 100
 
-        baseline = item[
-            "historical_baseline"
-        ]
+        item["vs_historical_baseline"] = vs_baseline
+        item["vs_current"] = vs_current
 
-        # Forecast vs historical normal
-        vs_baseline = (
-            (
-                prediction
-                - baseline
-            )
-            / baseline
-        ) * 100
-
-        # Forecast vs current demand
-        vs_current = (
-            (
-                prediction
-                - current_energy
-            )
-            / current_energy
-        ) * 100
-
-        item[
-            "vs_historical_baseline"
-        ] = vs_baseline
-
-        item[
-            "vs_current"
-        ] = vs_current
-
-        # Opportunity means:
-        # forecast is at least 5% below
-        # its historical expected demand.
-        item[
-            "optimization_opportunity"
-        ] = (
-            vs_baseline <= -5
+        # A future hour is actionable only when it is both:
+        # 1. at least 5% below its historical baseline, and
+        # 2. lower than the current operating demand.
+        item["optimization_opportunity"] = (
+            vs_baseline <= -5 and prediction < current_energy
         )
 
-    # --------------------------------------------------------
-    # Candidate optimization hours
-    # --------------------------------------------------------
-
     candidates = [
-        item
-        for item in forecasts
-        if item[
-            "optimization_opportunity"
-        ]
+        item for item in forecasts if item["optimization_opportunity"]
     ]
 
-    # --------------------------------------------------------
-    # Group consecutive hours
-    # --------------------------------------------------------
-
-    candidates.sort(
-        key=lambda x:
-            x["timestamp"]
-    )
+    candidates.sort(key=lambda x: x["timestamp"])
 
     windows = []
-
     current_window = []
 
     for item in candidates:
-
         if not current_window:
-
-            current_window = [
-                item
-            ]
-
+            current_window = [item]
             continue
 
-        previous = (
-            current_window[-1]
-        )
+        previous = current_window[-1]
 
-        if (
-            item["timestamp"]
-            - previous["timestamp"]
-        ) == pd.Timedelta(
-            hours=1
-        ):
-
-            current_window.append(
-                item
-            )
-
+        if item["timestamp"] - previous["timestamp"] == pd.Timedelta(hours=1):
+            current_window.append(item)
         else:
-
-            windows.append(
-                current_window
-            )
-
-            current_window = [
-                item
-            ]
+            windows.append(current_window)
+            current_window = [item]
 
     if current_window:
-
-        windows.append(
-            current_window
-        )
-
-    # --------------------------------------------------------
-    # Format windows
-    # --------------------------------------------------------
+        windows.append(current_window)
 
     formatted_windows = []
 
     for window in windows:
-
         average_prediction = float(
-            np.mean(
-                [
-                    x[
-                        "predicted_energy"
-                    ]
-                    for x in window
-                ]
-            )
+            np.mean([x["predicted_energy"] for x in window])
         )
-
         average_baseline = float(
-            np.mean(
-                [
-                    x[
-                        "historical_baseline"
-                    ]
-                    for x in window
-                ]
-            )
+            np.mean([x["historical_baseline"] for x in window])
         )
-
         average_confidence = float(
-            np.mean(
-                [
-                    x[
-                        "confidence"
-                    ]
-                    for x in window
-                ]
-            )
+            np.mean([x["confidence"] for x in window])
         )
 
         saving_vs_baseline = (
-            (
-                average_baseline
-                - average_prediction
-            )
-            / average_baseline
+            (average_baseline - average_prediction) / average_baseline
         ) * 100
 
         saving_vs_current = (
-            (
-                current_energy
-                - average_prediction
-            )
-            / current_energy
+            (current_energy - average_prediction) / current_energy
         ) * 100
 
-        start = window[0][
-            "timestamp"
-        ]
-
-        end = (
-            window[-1][
-                "timestamp"
-            ]
-            + pd.Timedelta(
-                hours=1
-            )
-        )
+        start = window[0]["timestamp"]
+        end = window[-1]["timestamp"] + pd.Timedelta(hours=1)
 
         if saving_vs_baseline >= 15:
-
             rating = "excellent"
-
         elif saving_vs_baseline >= 10:
-
             rating = "good"
-
         else:
-
             rating = "moderate"
 
         formatted_windows.append(
             {
-                "start":
-                    start.strftime(
-                        "%H:%M"
-                    ),
-
-                "end":
-                    end.strftime(
-                        "%H:%M"
-                    ),
-
-                "start_timestamp":
-                    str(start),
-
-                "end_timestamp":
-                    str(end),
-
-                "average_predicted_demand":
-                    round(
-                        average_prediction,
-                        2
-                    ),
-
-                "average_historical_demand":
-                    round(
-                        average_baseline,
-                        2
-                    ),
-
-                "saving_vs_historical_baseline":
-                    round(
-                        saving_vs_baseline,
-                        2
-                    ),
-
-                "change_vs_current":
-                    round(
-                        saving_vs_current,
-                        2
-                    ),
-
-                "confidence":
-                    round(
-                        average_confidence,
-                        1
-                    ),
-
-                "rating":
-                    rating,
+                "start": start.strftime("%H:%M"),
+                "end": end.strftime("%H:%M"),
+                "start_timestamp": str(start),
+                "end_timestamp": str(end),
+                "average_predicted_demand": round(average_prediction, 2),
+                "average_historical_demand": round(average_baseline, 2),
+                "saving_vs_historical_baseline": round(saving_vs_baseline, 2),
+                "change_vs_current": round(saving_vs_current, 2),
+                "confidence": round(average_confidence, 1),
+                "rating": rating,
             }
         )
-
-    # --------------------------------------------------------
-    # Rank windows
-    # --------------------------------------------------------
 
     formatted_windows.sort(
-        key=lambda x:
-            (
-                -x[
-                    "saving_vs_historical_baseline"
-                ],
-                -x[
-                    "confidence"
-                ],
-            )
+        key=lambda x: (
+            -x["saving_vs_current"],
+            -x["saving_vs_historical_baseline"],
+            -x["confidence"],
+        )
     )
 
-    # --------------------------------------------------------
-    # Important safety rule:
-    #
-    # If current demand is already significantly below
-    # historical demand, don't recommend moving workloads
-    # unless the future window is ALSO better than current.
-    # --------------------------------------------------------
+    best_window = formatted_windows[0] if formatted_windows else None
 
-    usable_windows = []
-
-    for window in formatted_windows:
-
-        if (
-            window[
-                "average_predicted_demand"
-            ]
-            < current_energy * 0.95
-        ):
-
-            usable_windows.append(
-                window
-            )
-
-    # --------------------------------------------------------
-    # Final decision
-    # --------------------------------------------------------
-
-    if usable_windows:
-
-        best_window = (
-            usable_windows[0]
-        )
-
-        status = (
-            "optimization_available"
-        )
-
-        recommendation = (
-            "Schedule flexible or "
-            "energy-intensive workloads "
-            "during this forecasted "
-            "low-demand window."
-        )
-
-    elif current_is_low:
-
-        best_window = None
-
-        status = (
-            "current_period_already_optimal"
-        )
-
-        recommendation = (
-            "Current demand is already "
-            "significantly below its "
-            "historical baseline. No "
-            "future period is forecast "
-            "to improve meaningfully "
-            "on the current operating "
-            "level."
-        )
-
-    else:
-
-        best_window = None
-
-        status = (
-            "no_significant_window"
-        )
-
-        recommendation = (
-            "No significant low-demand "
-            "optimization window was "
-            "identified in the next "
-            "24 hours."
-        )
-
-    # --------------------------------------------------------
-    # Hourly output
-    # --------------------------------------------------------
-
-    hourly = []
+    hourly_forecast = []
 
     for item in forecasts:
-
-        hourly.append(
+        hourly_forecast.append(
             {
-                "time":
-                    item[
-                        "timestamp"
-                    ].strftime(
-                        "%H:%M"
-                    ),
-
-                "timestamp":
-                    str(
-                        item[
-                            "timestamp"
-                        ]
-                    ),
-
-                "predicted_energy":
-                    round(
-                        item[
-                            "predicted_energy"
-                        ],
-                        2
-                    ),
-
-                "historical_baseline":
-                    round(
-                        item[
-                            "historical_baseline"
-                        ],
-                        2
-                    ),
-
-                "vs_historical_baseline":
-                    round(
-                        item[
-                            "vs_historical_baseline"
-                        ],
-                        2
-                    ),
-
-                "vs_current":
-                    round(
-                        item[
-                            "vs_current"
-                        ],
-                        2
-                    ),
-
-                "confidence":
-                    item[
-                        "confidence"
-                    ],
-
-                "optimization_opportunity":
-                    bool(
-                        item[
-                            "optimization_opportunity"
-                        ]
-                    ),
+                "time": item["timestamp"].strftime("%H:%M"),
+                "timestamp": str(item["timestamp"]),
+                "predicted_energy": round(item["predicted_energy"], 2),
+                "historical_baseline": round(item["historical_baseline"], 2),
+                "vs_historical_baseline": round(
+                    item["vs_historical_baseline"], 2
+                ),
+                "vs_current": round(item["vs_current"], 2),
+                "confidence": round(item["confidence"], 1),
+                "optimization_opportunity": item["optimization_opportunity"],
             }
+        )
+
+    if best_window:
+        recommendation = (
+            "Schedule flexible or energy-intensive workloads during "
+            "this forecasted lower-demand window."
+        )
+    else:
+        recommendation = (
+            "No future period is currently lower than both the current "
+            "demand and its historical baseline. Continue normal operations."
         )
 
     return {
-
-        "status":
-            status,
-
-        "generated_at":
-            str(
-                current_timestamp
-            ),
-
-        "analysis_period":
-            "Next 24 hours",
-
-        "current_energy":
-            round(
-                current_energy,
-                2
-            ),
-
-        "current_historical_baseline":
-            round(
-                current_baseline,
-                2
-            ),
-
-        "current_vs_historical_baseline":
-            round(
-                current_vs_baseline,
-                2
-            ),
-
-        "current_period_already_low":
-            bool(
-                current_is_low
-            ),
-
-        "best_window":
-            best_window,
-
-        "windows":
-            usable_windows,
-
-        "hourly_forecast":
-            hourly,
-
-        "recommendation":
-            recommendation,
+        "status": "optimization_available" if best_window else "no_optimization_opportunity",
+        "generated_at": str(current_timestamp),
+        "analysis_period": "Next 24 hours",
+        "current_energy": round(current_energy, 2),
+        "current_historical_baseline": round(current_baseline, 2),
+        "current_vs_historical_baseline": round(current_vs_baseline, 2),
+        "current_period_already_low": current_is_low,
+        "best_window": best_window,
+        "windows": formatted_windows,
+        "hourly_forecast": hourly_forecast,
+        "recommendation": recommendation,
     }
 
 
-# ============================================================
-# RUN
-# ============================================================
-
 print()
-print("[5/5] Generating optimization result...")
-
-result = optimize()
-
-print()
-print("=" * 60)
-print("OPTIMIZATION RESULT")
-print("=" * 60)
-
-print(
-    f"Current demand: "
-    f"{result['current_energy']:,.2f} kW"
-)
-
-print(
-    f"Historical baseline: "
-    f"{result['current_historical_baseline']:,.2f} kW"
-)
-
-print(
-    f"Current vs baseline: "
-    f"{result['current_vs_historical_baseline']:.2f}%"
-)
-
-print(
-    f"Current period already low: "
-    f"{result['current_period_already_low']}"
-)
-
-if result["best_window"]:
-
-    best = result[
-        "best_window"
-    ]
-
-    print()
-    print(
-        f"BEST WINDOW: "
-        f"{best['start']} - {best['end']}"
-    )
-
-    print(
-        f"AI forecast: "
-        f"{best['average_predicted_demand']:,.2f} kW"
-    )
-
-    print(
-        f"Historical expected: "
-        f"{best['average_historical_demand']:,.2f} kW"
-    )
-
-    print(
-        f"Below historical baseline: "
-        f"{best['saving_vs_historical_baseline']:.2f}%"
-    )
-
-    print(
-        f"Change vs current: "
-        f"{best['change_vs_current']:.2f}%"
-    )
-
-    print(
-        f"Confidence: "
-        f"{best['confidence']:.1f}%"
-    )
-
-    print(
-        f"Rating: "
-        f"{best['rating'].upper()}"
-    )
-
-else:
-
-    print()
-    print(
-        "No meaningful optimization "
-        "window identified."
-    )
-
-print()
-print("AI recommendation:")
-print(
-    result[
-        "recommendation"
-    ]
-)
-
-print()
-print("=" * 60)
-print("OPTIMIZATION ENGINE COMPLETE")
+print("[5/5] Optimization engine ready.")
 print("=" * 60)
