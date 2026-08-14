@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models.optimization_engine import optimize
 
+from backend.live_simulator import router as live_router
+
 
 warnings.filterwarnings("ignore")
 
@@ -30,6 +32,8 @@ app = FastAPI(
     description="AI-powered energy intelligence platform",
     version="1.0.0",
 )
+
+app.include_router(live_router)
 
 
 # ============================================================
